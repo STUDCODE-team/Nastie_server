@@ -25,7 +25,7 @@ func main() {
 }
 
 func startBot() {
-	bot, _ := tgbotapi.NewBotAPI("5862822125:AAEI_yHy6LT4ythfDxbbALgO9Tainf4oOrw")
+	bot, _ := tgbotapi.NewBotAPI("5401428277:AAHAbVaEoKnvPR4IQr0slOu9x2jVLrtTa54")
 	bot.Debug = false
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
