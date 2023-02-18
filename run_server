@@ -1,0 +1,5 @@
+#!/bin/bash
+
+killall server
+go build server.go
+./server &
