@@ -78,7 +78,6 @@ func RemoveToken(id int, token string) {
 }
 
 func GetHosts(id int) map[string]string {
-	// TODO: надо сделать map с данными хоста, чтобы надпись на кнопке была не токеном а ФИО
 	tokens := make(map[string]string)
 	var token, name string
 	rows, err := db.Query(`SELECT t.token, h.name FROM tokens t JOIN hosts h ON t.token=h.token 
