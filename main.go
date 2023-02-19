@@ -1,44 +1,87 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
+
+	_ "github.com/lib/pq"
 
 	tgbotapi "gopkg.in/telegram-bot-api.v4"
 )
 
-func SetToken(token string) {
-	// TODO: здесь типо токен проверяем в бд кто это все дела и добавляем к токенам чела
+var db *sql.DB
 
-	fmt.Println(token)
+func ConnectToDatabase() {
+	var err error
+	db, err = sql.Open("postgres", "host=127.0.0.1 user=postgres password=postgres dbname=nastie port=5432")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Connected to database")
+}
+
+func CreateTables() {
+	_, err := db.Exec(`CREATE TABLE users (id SERIAL PRIMARY KEY, tg_id INTEGER NOT NULL);
+					CREATE TABLE tokens (user_id INTEGER REFERENCES users(id), token VARCHAR NOT NULL)`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Created tables")
+}
+
+func AddUser(tg_id int) {
+	_, err := db.Exec("INSERT INTO users(tg_id) VALUES($1) ON CONFLICT DO NOTHING", tg_id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Authorized user:", tg_id)
+}
+
+func AddToken(id int, token string) {
+	_, err := db.Exec("INSERT INTO tokens(user_id, token) SELECT id, $1 FROM users WHERE tg_id=$2", token, id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("User", id, "add a token: ", token)
 }
 
 func GetHosts(id int) []string {
-	// TODO: здесь берем из бд данные
-
-	return []string{"Изотова А.А.", "Бабердин П.В.", "Скляр Л.Н.", "Ковтун И.И.", "Гудкова И.А.", "Гуриков С.Р."}
+	// TODO: надо сделать map с данными хоста, чтобы надпись на кнопке была не токеном а ФИО
+	var tokens []string
+	var token string
+	rows, err := db.Query("SELECT token FROM tokens WHERE user_id=(SELECT id FROM users WHERE tg_id=$1 LIMIT 1)", id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		err := rows.Scan(&token)
+		if err != nil {
+			log.Fatal(err)
+		}
+		tokens = append(tokens, token)
+	}
+	err = rows.Err()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(tokens)
+	return tokens
 }
 
 func GetButtonHosts(id int) tgbotapi.InlineKeyboardMarkup {
-	var buttons []tgbotapi.KeyboardButton
+	var buttons []tgbotapi.InlineKeyboardButton
 	hosts := GetHosts(id)
 
 	for _, v := range hosts {
-		buttons = append(buttons, tgbotapi.NewKeyboardButton(v))
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData(v, v))
 	}
-
-	var numericKeyboard = tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Изотова А.А.", "token1"),
-			tgbotapi.NewInlineKeyboardButtonData("Бабердин П.В.", "token2"),
-			tgbotapi.NewInlineKeyboardButtonData("Скляр Л.Н.", "token3"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Ковтун И.И.", "token4"),
-			tgbotapi.NewInlineKeyboardButtonData("Гудкова И.А.", "token5"),
-			tgbotapi.NewInlineKeyboardButtonData("Гуриков С.Р.", "token6"),
-		),
-	)
-	return numericKeyboard
+	return tgbotapi.NewInlineKeyboardMarkup(buttons)
 }
 
 func GetHostLocation(token string) {
@@ -61,6 +104,7 @@ func TelegramBot() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 			switch update.Message.Command() {
 			case "start":
+				AddUser(update.Message.From.ID)
 				msg.ReplyMarkup = GetButtonHosts(update.Message.From.ID)
 				msg.Text = "Добро пожаловать!"
 				bot.Send(msg)
@@ -70,7 +114,7 @@ func TelegramBot() {
 					msg.Text = "Используйте /token [token]"
 					bot.Send(msg)
 				} else {
-					SetToken(update.Message.CommandArguments())
+					AddToken(update.Message.From.ID, update.Message.CommandArguments())
 				}
 			default:
 				msg.Text = "Неизвестная команда"
@@ -84,6 +128,10 @@ func TelegramBot() {
 }
 
 func main() {
+	ConnectToDatabase()
+	defer db.Close()
+	// CreateTables() // Если надо создать таблицы
+
 	go TelegramBot()
 
 	for {
