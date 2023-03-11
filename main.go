@@ -19,9 +19,18 @@ const (
 	Remove = "remove"
 )
 
+const (
+	host     = "5.253.62.248"
+	port     = 5432
+	user     = "admin_root"
+	password = "sPo9JuNZaP"
+	dbname   = "admin_nastie"
+)
+
 func ConnectToDatabase() {
 	var err error
-	db, err = sql.Open("postgres", "host=127.0.0.1 user=postgres password=postgres dbname=nastie port=5432")
+	connStr := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d", host, user, password, dbname, port)
+	db, err = sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -57,9 +66,9 @@ func AddUser(tg_id int) {
 
 func AddToken(id int, token string) bool {
 	var row string
-	err := db.QueryRow("SELECT token FROM hosts WHERE token=$1", token).Scan(row)
+	err := db.QueryRow("SELECT token FROM hosts WHERE token=$1", token).Scan(&row)
 	if err != sql.ErrNoRows {
-		_, err = db.Exec("INSERT INTO tokens(user_id, token) SELECT id, $1 FROM users WHERE tg_id=$2;", token, id)
+		_, err = db.Exec("INSERT INTO tokens(user_id, token) SELECT id, $1 FROM users WHERE tg_id=$2", token, id)
 		if err != nil {
 			log.Fatal(err)
 		}
